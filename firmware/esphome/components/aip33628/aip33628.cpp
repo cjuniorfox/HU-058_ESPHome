@@ -6,6 +6,14 @@
 #include <driver/gptimer.h>
 #include <soc/gpio_struct.h>
 
+#if CONFIG_IDF_TARGET_ESP32C3
+#define AIP33628_GPIO_OUT_W1TC(value) (GPIO.out_w1tc.val = (value))
+#define AIP33628_GPIO_OUT_W1TS(value) (GPIO.out_w1ts.val = (value))
+#else
+#define AIP33628_GPIO_OUT_W1TC(value) (GPIO.out_w1tc = (value))
+#define AIP33628_GPIO_OUT_W1TS(value) (GPIO.out_w1ts = (value))
+#endif
+
 namespace esphome {
 namespace aip33628 {
 
@@ -19,7 +27,7 @@ struct Block {
   uint8_t com_hi;
 };
 static const Block BLOCKS[4] = {
-    {0, 0x30, 0xC0},  // hour tens,   annunciator AM
+    {0, 0x30, 0xC0},  // hour tens,   annunciator A
     {0, 0x03, 0x0C},  // hour ones,   annunciator colon
     {1, 0x30, 0xC0},  // minute tens, annunciator date dash
     {1, 0x03, 0x0C},  // minute ones, annunciator degree mark
@@ -250,7 +258,7 @@ void IRAM_ATTR Aip33628Panel::send_pair_(uint16_t ss1, uint16_t ss2, uint8_t cs,
   const uint32_t clks = clk_mask_ | clk2_mask_;
   const uint32_t dats = data_mask_ | data2_mask_;
 
-  GPIO.out_w1tc = clks | dats;
+  AIP33628_GPIO_OUT_W1TC(clks | dats);
 
   for (int i = 0; i < 30; i++) {
     uint32_t set = 0;
@@ -261,18 +269,18 @@ void IRAM_ATTR Aip33628Panel::send_pair_(uint16_t ss1, uint16_t ss2, uint8_t cs,
     f1 >>= 1;
     f2 >>= 1;
     // Data settles while CLK is low, then one rising edge shifts both buses.
-    GPIO.out_w1tc = dats & ~set;
-    GPIO.out_w1ts = set;
-    GPIO.out_w1ts = clks;
+    AIP33628_GPIO_OUT_W1TC(dats & ~set);
+    AIP33628_GPIO_OUT_W1TS(set);
+    AIP33628_GPIO_OUT_W1TS(clks);
     if (i < 29)
-      GPIO.out_w1tc = clks;
+      AIP33628_GPIO_OUT_W1TC(clks); 
   }
 
   // CLK is still high after bit 29. A DATA rising edge here is the latch.
-  GPIO.out_w1tc = dats;
-  GPIO.out_w1ts = dats;
-  GPIO.out_w1tc = dats;
-  GPIO.out_w1tc = clks;
+  AIP33628_GPIO_OUT_W1TC(dats);
+  AIP33628_GPIO_OUT_W1TS(dats);
+  AIP33628_GPIO_OUT_W1TC(dats);
+  AIP33628_GPIO_OUT_W1TC(clks);
 }
 
 // Walk the schedule the renderer built. The timer runs at a fixed UNIT_US
@@ -502,6 +510,13 @@ void Aip33628Panel::show_number(int value, const std::string &unit, int ms) {
   dirty_ = true;
 }
 
+void Aip33628Panel::show_string(const std::string &text, int ms) {
+  text_ = text.substr(0, 4);
+  mode_ = Mode::STRING;
+  mode_until_ = millis() + mode_lifetime(ms);
+  dirty_ = true;
+}
+
 // Every populated position, white, at a fixed brightness, for a few seconds.
 // This is a hardware check, so user color and brightness settings do not
 // change the result.
@@ -543,6 +558,13 @@ void Aip33628Panel::draw_number_(int value, char unit) {
     value /= 10;
   } while (value > 0 && pos >= 0);
   if (neg && pos >= 0) write_digit_(pos, '-');
+}
+
+// Left aligned, up to four characters. Unsupported characters are blank.
+void Aip33628Panel::draw_string_() {
+  for (size_t i = 0; i < text_.size(); i++) {
+    write_digit_(i, text_[i]);
+  }
 }
 
 // Full saturation hue to RGB. Effects ride the color wheel rather than the
@@ -767,6 +789,13 @@ void Aip33628Panel::loop() {
   // A pushed number does not need the clock to be set, so it comes first.
   if (mode_ == Mode::NUMBER) {
     draw_number_(number_, unit_);
+    render_();
+    return;
+  }
+
+
+  if (mode_ == Mode::STRING) {
+    draw_string_();
     render_();
     return;
   }

@@ -67,7 +67,7 @@ enum class Spread : uint8_t { PANEL = 0, DIGIT = 1, LED = 2 };
 
 // What the panel is showing. Everything except TIME is temporary and expires
 // on its own, so no caller can leave the clock stuck not being a clock.
-enum class Mode : uint8_t { TIME, SECONDS, NUMBER, LAMP };
+enum class Mode : uint8_t { TIME, SECONDS, NUMBER, STRING, LAMP };
 
 // One step of the scan schedule: latch this pattern on both drivers, then
 // hold it for this long. Adjacent sub-frames with identical data collapse
@@ -129,6 +129,7 @@ class Aip33628Panel : public Component {
   // a lifetime in milliseconds and falls back to the time when it runs out.
   void show_seconds(int ms);
   void show_number(int value, const std::string &unit, int ms);
+  void show_string(const std::string &text, int ms);
   // Every populated position, white, at a fixed brightness. Ignores the
   // color tiers, any running effect, and the light being off.
   void lamp_test(int ms);
@@ -168,6 +169,7 @@ class Aip33628Panel : public Component {
   void write_digit_(uint8_t block, char c);
   void write_pos_(uint8_t block, uint8_t seg, bool on);
   void draw_number_(int value, char unit);
+  void draw_string_( );
   static bool scan_tick_(gptimer_handle_t timer, const gptimer_alarm_event_data_t *edata,
                          void *arg);
   void send_pair_(uint16_t ss1, uint16_t ss2, uint8_t cs, uint8_t is);
@@ -236,6 +238,7 @@ class Aip33628Panel : public Component {
   uint8_t lamp_current_{0};
   int number_{0};
   char unit_{'\0'};
+  std::string text_{};
 
   int last_key_{-1};  // whatever the current mode reduces its content to
   bool last_colon_{false};
