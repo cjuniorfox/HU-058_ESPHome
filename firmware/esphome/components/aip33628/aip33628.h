@@ -67,7 +67,7 @@ enum class Spread : uint8_t { PANEL = 0, DIGIT = 1, LED = 2 };
 
 // What the panel is showing. Everything except TIME is temporary and expires
 // on its own, so no caller can leave the clock stuck not being a clock.
-enum class Mode : uint8_t { TIME, SECONDS, NUMBER, STRING, LAMP };
+enum class Mode : uint8_t { TIME, SECONDS, DATE, YEAR, NUMBER, STRING, MARQUEE, LAMP };
 
 // One step of the scan schedule: latch this pattern on both drivers, then
 // hold it for this long. Adjacent sub-frames with identical data collapse
@@ -109,6 +109,10 @@ class Aip33628Panel : public Component {
     blink_colon_ = v;
     dirty_ = true;
   }
+  void set_date_format(bool month_first) {
+    month_first_ = month_first;
+    dirty_ = true;
+  }
   // Offline drops the upper colon dot, so a glance at the panel says whether
   // the time is still being kept honest. Driven from the wifi triggers in
   // clock.yaml rather than by including the wifi component here.
@@ -125,11 +129,13 @@ class Aip33628Panel : public Component {
   // Called by the light platform. Color components and brightness are 0 to 1.
   void set_light(bool on, float r, float g, float b, float brightness);
 
+  void show_date(int ms);
+  void show_year(int ms);
   // Temporary displays, driven from the api actions in clock.yaml. Each takes
   // a lifetime in milliseconds and falls back to the time when it runs out.
   void show_seconds(int ms);
   void show_number(int value, const std::string &unit, int ms);
-  void show_string(const std::string &text, int ms);
+  void show_text(const std::string &text, int ms);
   // Every populated position, white, at a fixed brightness. Ignores the
   // color tiers, any running effect, and the light being off.
   void lamp_test(int ms);
@@ -169,7 +175,10 @@ class Aip33628Panel : public Component {
   void write_digit_(uint8_t block, char c);
   void write_pos_(uint8_t block, uint8_t seg, bool on);
   void draw_number_(int value, char unit);
-  void draw_string_( );
+  void draw_string_( std::string text);
+  void draw_marquee_(std::string text);
+  void draw_date_(esphome::ESPTime now);
+  void draw_year_(esphome::ESPTime now);
   static bool scan_tick_(gptimer_handle_t timer, const gptimer_alarm_event_data_t *edata,
                          void *arg);
   void send_pair_(uint16_t ss1, uint16_t ss2, uint8_t cs, uint8_t is);
@@ -191,6 +200,7 @@ class Aip33628Panel : public Component {
   bool twelve_hour_{true};
   bool blink_colon_{true};
   bool online_{false};
+  bool month_first_{true};  // date format, true for MM-DD, false for DD-MM
 
   // Which positions are lit, before color is applied.
   bool on_[4][9]{};   // [block][segment], segments A..G then annunciator, annunciator 2
@@ -239,6 +249,7 @@ class Aip33628Panel : public Component {
   int number_{0};
   char unit_{'\0'};
   std::string text_{};
+  int marquee_pos_{0};
 
   int last_key_{-1};  // whatever the current mode reduces its content to
   bool last_colon_{false};

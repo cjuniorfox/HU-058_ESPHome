@@ -100,29 +100,12 @@ const PosGeom GEOM[4][9] = {
     },
 };
 
-// Seven segment font, bit 0 = A through bit 6 = G. The letters are the subset
-// that reads unambiguously on seven segments, so a caller can put a unit or a
-// short label in the rightmost position.
+// Seven segment font, bit 0 = A through bit 6 = G. The letters below are the
+// readable subset for a seven-segment display; the most ambiguous glyphs are
+// intentionally remapped to a close, legible alternative.
 static uint8_t glyph(char c) {
   switch (c) {
-    case 'A': return 0b1110111;
-    case 'b': return 0b1111100;
-    case 'C': return 0b0111001;
-    case 'c': return 0b1011000;
-    case 'd': return 0b1011110;
-    case 'E': return 0b1111001;
-    case 'F': return 0b1110001;
-    case 'H': return 0b1110110;
-    case 'h': return 0b1110100;
-    case 'L': return 0b0111000;
-    case 'n': return 0b1010100;
-    case 'o': return 0b1011100;
-    case 'P': return 0b1110011;
-    case 'r': return 0b1010000;
-    case 't': return 0b1111000;
-    case 'U': return 0b0111110;
-    case 'u': return 0b0011100;
-    case 'y': return 0b1101110;
+    // Digits
     case '0': return 0b0111111;
     case '1': return 0b0000110;
     case '2': return 0b1011011;
@@ -134,7 +117,48 @@ static uint8_t glyph(char c) {
     case '8': return 0b1111111;
     case '9': return 0b1101111;
     case '-': return 0b1000000;
-    default:  return 0;
+
+    // Readable letters. Ambiguous ones are remapped to a nearby glyph that
+    // still reads clearly on seven segments.
+
+    case 'A': case 'a': return 0b1110111;
+    case 'B': case 'b': return 0b1111100;
+    case 'C': return 0b0111001;
+    case 'c': return 0b1011000;
+    case 'D': case 'd': return 0b1011110;
+    case 'E': case 'e':return 0b1111001;
+    case 'F': case 'f': return 0b1110001;
+    case 'G': return 0b0111101;
+    case 'g': return 0b1101111;
+    case 'H': return 0b1110110;
+    case 'h': return 0b1110100;
+    case 'I': return 0b0000110;
+    case 'i': return 0b0000101;
+    case 'J': return 0b0011110;
+    case 'j': return 0b0001101;
+    case 'K': case 'k': return 0b1110101;
+    case 'L': return 0b0111000;
+    case 'l': return 0b0110000;
+    case 'M': case 'm': return 0b1010101;
+    case 'N': return 0b0110111;
+    case 'n': return 0b1010100;
+    case 'O': return 0b0111111;
+    case 'o': return 0b1011100;
+    case 'P': case 'p': return 0b1110011;
+    case 'Q': case 'q': return 0b1100111;
+    case 'R': case 'r': return 0b1010000;
+    case 'S': case 's': return 0b1101101;
+    case 'T': case 't': return 0b1110000;
+    case 'U': return 0b0111110; 
+    case 'u': return 0b0011100;
+    case 'V': case 'v': return 0b0101010;
+    case 'W': case 'w': return 0b1101010;
+    case 'X': return 0b0110110;
+    case 'x': return 0b0010100;   // remap to Y-like
+    case 'Y': case 'y': return 0b1101110;
+    case 'Z': case 'z': return 0b0011011;
+
+    default: return 0;
   }
 }
 
@@ -495,6 +519,18 @@ static uint32_t mode_lifetime(int ms) {
   return (uint32_t) ms;
 }
 
+void Aip33628Panel::show_date(int ms) {
+  mode_ = Mode::DATE;
+  mode_until_ = millis() + mode_lifetime(ms);
+  dirty_ = true;
+}
+
+void Aip33628Panel::show_year(int ms) {
+  mode_ = Mode::YEAR;
+  mode_until_ = millis() + mode_lifetime(ms);
+  dirty_ = true;
+}
+
 void Aip33628Panel::show_seconds(int ms) {
   mode_ = Mode::SECONDS;
   mode_until_ = millis() + mode_lifetime(ms);
@@ -510,9 +546,9 @@ void Aip33628Panel::show_number(int value, const std::string &unit, int ms) {
   dirty_ = true;
 }
 
-void Aip33628Panel::show_string(const std::string &text, int ms) {
-  text_ = text.substr(0, 4);
-  mode_ = Mode::STRING;
+void Aip33628Panel::show_text(const std::string &text, int ms) {
+  mode_ = text.size() > 4 ? Mode::MARQUEE : Mode::STRING;
+  text_ = text;
   mode_until_ = millis() + mode_lifetime(ms);
   dirty_ = true;
 }
@@ -561,10 +597,60 @@ void Aip33628Panel::draw_number_(int value, char unit) {
 }
 
 // Left aligned, up to four characters. Unsupported characters are blank.
-void Aip33628Panel::draw_string_() {
-  for (size_t i = 0; i < text_.size(); i++) {
-    write_digit_(i, text_[i]);
+void Aip33628Panel::draw_string_(std::string text) {
+  for (size_t i = 0; i < text.size() && i < 4; i++) {
+    write_digit_(i, text[i]);
   }
+}
+
+void Aip33628Panel::draw_marquee_(std::string text) {
+  int text_length = text.length();
+  std::string padded_text = "   " + text;  // Add spaces for scrolling effect
+  std::string padded = padded_text.substr(marquee_pos_, 4);
+  marquee_pos_ = (marquee_pos_ + 1);
+  if (marquee_pos_ >= text_length + 4) {
+    marquee_pos_ = 0;
+  }
+  draw_string_(padded);
+}
+
+void Aip33628Panel::draw_date_(esphome::ESPTime now){
+    int month = now.month;
+    int day = now.day_of_month;
+    if (month_first_) {
+      if (month >= 10){
+        write_digit_(0, (char) ('0' + month / 10));
+      }
+      write_digit_(1, (char) ('0' + month % 10));
+      if (day >= 10){
+        write_digit_(2, (char) ('0' + day / 10));
+      }
+      write_digit_(3, (char) ('0' + day % 10));
+    } else {
+      if (day >= 10){
+        write_digit_(0, (char) ('0' + day / 10));
+      }
+      write_digit_(1, (char) ('0' + day % 10));
+      if (month >= 10){
+        write_digit_(2, (char) ('0' + month / 10));
+      }
+      write_digit_(3, (char) ('0' + month % 10));
+    }
+    write_pos_(2, SEG_ANNUN, true);
+}
+
+void Aip33628Panel::draw_year_(esphome::ESPTime now){
+    int year = now.year;
+    if (year >= 1000){
+        write_digit_(0, (char) ('0' + year / 1000));
+    }
+    if (year >= 100){
+        write_digit_(1, (char) ('0' + (year / 100) % 10));
+    }
+    if (year >= 10){
+        write_digit_(2, (char) ('0' + (year / 10) % 10));
+    }
+    write_digit_(3, (char) ('0' + year % 10));
 }
 
 // Full saturation hue to RGB. Effects ride the color wheel rather than the
@@ -793,12 +879,23 @@ void Aip33628Panel::loop() {
     return;
   }
 
-
+  // Draw a string up to four characters.
   if (mode_ == Mode::STRING) {
-    draw_string_();
+    draw_string_( text_);
     render_();
     return;
   }
+
+  // Draw a scrolling marquee. The text is padded with spaces so it can scroll
+  // off the right edge and reappear on the left. The position is remembered
+  // across calls so the scroll is continuous rather than a jump back to the
+  // start every time the loop runs.
+  if (mode_ == Mode::MARQUEE) {
+    draw_marquee_(text_);
+    render_();
+    return;
+  }
+  marquee_pos_ = 0;  // reset for next time the marquee is used
 
   if (!valid) {
     // No time yet. Four dashes says so without pretending to know the hour.
@@ -815,6 +912,18 @@ void Aip33628Panel::loop() {
     write_digit_(3, (char) ('0' + now.second % 10));
     if (online_) write_pos_(1, SEG_ANNUN, true);
     write_pos_(1, SEG_ANNUN2, true);
+    render_();
+    return;
+  }
+
+  if (mode_ == Mode::DATE) {
+    draw_date_(now);
+    render_();
+    return;
+  }
+
+  if (mode_ == Mode::YEAR) {
+    draw_year_(now);
     render_();
     return;
   }

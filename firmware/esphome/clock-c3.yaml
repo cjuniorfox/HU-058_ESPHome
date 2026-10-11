@@ -59,12 +59,36 @@ api:
       then:
         - lambda: id(panel)->show_number(value, unit, duration);
     # Left-aligned text, limited to four characters.
-    - action: show_string
+    - action: show_text
       variables:
         message: string
         duration: int
       then:
-        - lambda: id(panel)->show_string(message, duration); 
+        - lambda: id(panel)->show_text(message, duration);
+    - action: show_temperature_sensor
+      variables:
+        duration: int
+      then:
+        - lambda: |-
+            float c = id(hu058_temperature).state;
+            float f = c * 9.0f / 5.0f + 32.0f;
+          
+            int value = (id(temp_display_unit).current_option() == "F")
+                ? (int) round(f)
+                : (int) round(c);
+            std::string u = id(temp_display_unit).current_option();
+            id(panel)->show_number(value, u, duration);
+    - action: show_date
+      variables:
+        duration: int
+      then:
+        - lambda: id(panel)->show_date(duration);
+    - action: show_year
+      variables:
+        duration: int
+      then:
+        - lambda: id(panel)->show_year(duration);
+
     # Every populated LED, white, for a few seconds, then back to the time.
     # It ignores color, effects, brightness and the light being off. Duration
     # is milliseconds, and 3000 is the button below.
@@ -203,7 +227,7 @@ aip33628:
   # Ceiling on IS[3:0], 0 to 15. Fixed, never varied by content. The stock
   # firmware ran 0xF and drew 404mA doing it. Drop this if the drivers
   # run hotter than you want. See docs/display-map.md.
-  max_current: 15
+  max_current: 4 # Max current is 4. 15 of the full 500mA, or 266mA. The stock firmware ran 15/15.
 
 light:
   - platform: aip33628
@@ -255,12 +279,14 @@ sensor:
   - platform: adc
     pin: GPIO1
     id: hu058_ntc_voltage
+    #name: "HU-058 NTC Voltage"
     attenuation: 12db
     update_interval: 5s
     accuracy_decimals: 3
 
   - platform: resistance
     id: hu058_ntc_resistance
+    #name: "HU-058 NTC Resistance"
     sensor: hu058_ntc_voltage
     configuration: DOWNSTREAM 
     resistor: 10kOhm
@@ -271,9 +297,9 @@ sensor:
     id: hu058_temperature
     calibration:
       b_constant: 3950
-      reference_temperature: 26°C
-      reference_resistance: 7kOhm
-    accuracy_decimals: 1
+      reference_temperature: 25°C
+      reference_resistance: 9.5kOhm
+    accuracy_decimals: 2
     filters:
       - sliding_window_moving_average:
           window_size: 5
@@ -316,6 +342,16 @@ button:
     name: Show Seconds
     on_press:
       - lambda: id(panel)->show_seconds(5000);
+  
+  - platform: template
+    name: Show Date
+    on_press:
+      - lambda: id(panel)->show_date(5000);
+
+  - platform: template
+    name: Show Year
+    on_press:
+      - lambda: id(panel)->show_year(5000);
 
   # A UI handle for set_digit_color, and the quickest way to see the four
   # digits driven independently.
@@ -341,6 +377,19 @@ button:
       - lambda: |-
           id(panel)->set_gradient(0.00f, 1.00f, 0.10f,
                                   1.00f, 0.85f, 0.00f, -45.0f);
+
+  - platform: template
+    name: Temperature Sensor
+    on_press:
+      - lambda: |-
+          float c = id(hu058_temperature).state;
+          float f = c * 9.0f / 5.0f + 32.0f;
+
+          int value = (id(temp_display_unit).current_option() == "F")
+              ? (int) round(f)
+              : (int) round(c);
+          std::string u = id(temp_display_unit).current_option();
+          id(panel)->show_number(value, u, 5000);
 
 # A UI handle for the show_number action, which otherwise lives only under
 # Developer Tools > Actions. Setting either entity redraws immediately and the
@@ -382,14 +431,49 @@ select:
     id: test_unit
     optimistic: true
     restore_value: true
-    initial_option: "F"
-    options: ["None", "F", "C"]
+    initial_option: "C"
+    options: ["None", "C", "F"]
     set_action:
       - lambda: |-
           std::string u = x;
           if (u == "None") u.clear();
           id(panel)->show_number((int) id(test_number).state, u, 10000);
 
+  - platform: template
+    id: temp_display_unit
+    name: Temperature Display Unit
+    optimistic: true
+    restore_value: true
+    initial_option: "C"
+    options: ["C", "F"]
+
+  - platform: template
+    id: date_display_format
+    name: Date Display Format
+    optimistic: true
+    restore_value: true
+    initial_option: "DD/MM"
+    options: ["MM/DD", "DD/MM"]
+    set_action:
+      - lambda: |-
+          std::string format = x;
+          id(panel)->set_date_format(format == "MM/DD" ? 1 : 0);
+
+text:
+  - platform: template
+    name: Text Demo
+    mode: text
+    id: text_demo
+    optimistic: true
+    restore_value: true
+    initial_value: "HU-058 ESPHome"
+    set_action:
+      - lambda: |-
+          std::string s = x;
+          int len = s.length();
+          int ms = len < 10 ? 10000 : (len + 2) * 1000;
+          id(panel)->show_text(s, ms);
+    
 number:
   # Seconds for one full cycle. For Flash this is one complete on and off.
   - platform: template
@@ -474,4 +558,3 @@ number:
           std::string u = id(test_unit).current_option();
           if (u == "None") u.clear();
           id(panel)->show_number((int) x, u, 10000);
-
