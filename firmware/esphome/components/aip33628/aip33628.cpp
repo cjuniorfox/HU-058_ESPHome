@@ -547,6 +547,10 @@ void Aip33628Panel::show_number(int value, const std::string &unit, int ms) {
 }
 
 void Aip33628Panel::show_text(const std::string &text, int ms) {
+  if (text.empty()) {
+    ESP_LOGW(TAG, "show_text called with empty text; ignoring request");
+    return;
+  }
   mode_ = text.size() > 4 ? Mode::MARQUEE : Mode::STRING;
   text_ = text;
   mode_until_ = millis() + mode_lifetime(ms);

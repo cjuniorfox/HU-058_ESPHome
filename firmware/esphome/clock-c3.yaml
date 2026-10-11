@@ -20,6 +20,8 @@ esphome:
           id(panel)->set_effect_spread(sp == "Per Digit" ? 1 : sp == "Per LED" ? 2 : 0);
           std::string ef = id(effect_mode).current_option();
           id(panel)->set_effect(ef == "Color Cycle" ? 1 : ef == "Flash" ? 2 : 0);
+          std::string format = id(date_display_format).current_option();
+          id(panel)->set_date_format(format == "MM/DD" ? 1 : 0);
 
 esp32:
   variant: esp32c3
