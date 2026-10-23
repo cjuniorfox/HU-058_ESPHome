@@ -229,7 +229,7 @@ aip33628:
   # Ceiling on IS[3:0], 0 to 15. Fixed, never varied by content. The stock
   # firmware ran 0xF and drew 404mA doing it. Drop this if the drivers
   # run hotter than you want. See docs/display-map.md.
-  max_current: 4 # Max current is 4. 15 of the full 500mA, or 266mA. The stock firmware ran 15/15.
+  max_current: 7 # Max current is 7. 15 of the full 500mA, or 266mA. The stock firmware ran 15/15.
 
 light:
   - platform: aip33628

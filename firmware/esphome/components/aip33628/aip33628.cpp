@@ -133,7 +133,7 @@ static uint8_t glyph(char c) {
     case 'H': return 0b1110110;
     case 'h': return 0b1110100;
     case 'I': return 0b0000110;
-    case 'i': return 0b0000101;
+    case 'i': return 0b0000100;
     case 'J': return 0b0011110;
     case 'j': return 0b0001101;
     case 'K': case 'k': return 0b1110101;
@@ -148,7 +148,7 @@ static uint8_t glyph(char c) {
     case 'Q': case 'q': return 0b1100111;
     case 'R': case 'r': return 0b1010000;
     case 'S': case 's': return 0b1101101;
-    case 'T': case 't': return 0b1110000;
+    case 'T': case 't': return 0b0110001;
     case 'U': return 0b0111110; 
     case 'u': return 0b0011100;
     case 'V': case 'v': return 0b0101010;
@@ -607,13 +607,15 @@ void Aip33628Panel::draw_string_(std::string text) {
   }
 }
 
-void Aip33628Panel::draw_marquee_(std::string text) {
+void Aip33628Panel::draw_marquee_(const std::string &text, bool advance) {
   int text_length = text.length();
   std::string padded_text = "   " + text;  // Add spaces for scrolling effect
   std::string padded = padded_text.substr(marquee_pos_, 4);
-  marquee_pos_ = (marquee_pos_ + 1);
-  if (marquee_pos_ >= text_length + 4) {
-    marquee_pos_ = 0;
+  if (advance) {
+    marquee_pos_ = (marquee_pos_ + 1);
+    if (marquee_pos_ >= text_length + 4) {
+      marquee_pos_ = 0;
+    }
   }
   draw_string_(padded);
 }
@@ -813,6 +815,16 @@ void Aip33628Panel::update_effect_(uint32_t now_ms) {
 
 void Aip33628Panel::loop() {
   uint32_t now_ms = millis();
+  bool marquee_tick = false;
+  if (mode_ == Mode::MARQUEE) {
+    // Time-based stepping keeps marquee speed stable even when effect updates
+    // force redraws faster than the normal clock cadence.
+    uint32_t phase = now_ms / marquee_step_ms_;
+    if (phase != marquee_phase_) {
+      marquee_phase_ = phase;
+      marquee_tick = true;
+    }
+  }
 
   if (effect_ != Effect::NONE && (int32_t) (now_ms - effect_at_) >= 0) {
     effect_at_ = now_ms + 40;  // 25Hz, smooth enough for a fade to glide
@@ -852,7 +864,7 @@ void Aip33628Panel::loop() {
   // the time does. Blinking off means a steady colon, not a dark one.
   bool colon = blink_colon_ ? ((now_ms / 1000) % 2 == 0) : true;
 
-  if (!dirty_ && key == last_key_ && colon == last_colon_) return;
+  if (!dirty_ && key == last_key_ && colon == last_colon_ && !marquee_tick) return;
   last_key_ = key;
   last_colon_ = colon;
   dirty_ = false;
@@ -895,7 +907,7 @@ void Aip33628Panel::loop() {
   // across calls so the scroll is continuous rather than a jump back to the
   // start every time the loop runs.
   if (mode_ == Mode::MARQUEE) {
-    draw_marquee_(text_);
+    draw_marquee_(text_, marquee_tick);
     render_();
     return;
   }

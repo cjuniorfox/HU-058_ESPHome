@@ -175,8 +175,8 @@ class Aip33628Panel : public Component {
   void write_digit_(uint8_t block, char c);
   void write_pos_(uint8_t block, uint8_t seg, bool on);
   void draw_number_(int value, char unit);
-  void draw_string_( std::string text);
-  void draw_marquee_(std::string text);
+  void draw_string_(std::string text);
+  void draw_marquee_(const std::string &text, bool advance);
   void draw_date_(esphome::ESPTime now);
   void draw_year_(esphome::ESPTime now);
   static bool scan_tick_(gptimer_handle_t timer, const gptimer_alarm_event_data_t *edata,
@@ -250,6 +250,8 @@ class Aip33628Panel : public Component {
   char unit_{'\0'};
   std::string text_{};
   int marquee_pos_{0};
+  uint32_t marquee_phase_{0};
+  uint16_t marquee_step_ms_{250};
 
   int last_key_{-1};  // whatever the current mode reduces its content to
   bool last_colon_{false};
