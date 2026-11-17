@@ -149,7 +149,7 @@ static uint8_t glyph(char c) {
     case 'R': case 'r': return 0b1010000;
     case 'S': case 's': return 0b1101101;
     case 'T': case 't': return 0b0110001;
-    case 'U': return 0b0111110; 
+    case 'U': return 0b0111110;
     case 'u': return 0b0011100;
     case 'V': case 'v': return 0b0101010;
     case 'W': case 'w': return 0b1101010;
@@ -250,7 +250,8 @@ void Aip33628Panel::dump_config() {
   LOG_PIN("  DATA_1: ", data2_);
   ESP_LOGCONFIG(TAG, "  Max current: IS 0x%X, %u.%umA per lit sink", max_current_,
                 IS_MA[max_current_] / 10, IS_MA[max_current_] % 10);
-  ESP_LOGCONFIG(TAG, "  Hour format: %s", twelve_hour_ ? "12 hour" : "24 hour");
+  ESP_LOGCONFIG(TAG, "  Hour format: %s", twelve_hour_ ? "12 hour" : "24 hour");\
+  ESP_LOGCONFIG(TAG, "  Japanese: %s", japanese_ ? "yes" : "no");
   ESP_LOGCONFIG(TAG, "  Colon: %s", blink_colon_ ? "blinking" : "steady");
   ESP_LOGCONFIG(TAG, "  Network: %s", online_ ? "up" : "down");
   const char *fx = effect_ == Effect::CYCLE ? "color cycle"
@@ -297,7 +298,7 @@ void IRAM_ATTR Aip33628Panel::send_pair_(uint16_t ss1, uint16_t ss2, uint8_t cs,
     AIP33628_GPIO_OUT_W1TS(set);
     AIP33628_GPIO_OUT_W1TS(clks);
     if (i < 29)
-      AIP33628_GPIO_OUT_W1TC(clks); 
+      AIP33628_GPIO_OUT_W1TC(clks);
   }
 
   // CLK is still high after bit 29. A DATA rising edge here is the latch.
@@ -948,8 +949,13 @@ void Aip33628Panel::loop() {
   bool pm = hour >= 12;
   if (twelve_hour_) {
     hour = hour % 12;
-    if (hour == 0) hour = 12;
+    if (hour == 0 && !japanese_) hour = 12;
+  }else if (japanese_) {
+    if (hour < 6){
+      hour = hour + 24;  // 6am-11:59pm is 6-23, midnight to 5:59am is 24-29
+    }
   }
+
 
   // Leading zero stays suppressed in 24 hour mode as well.
   if (hour >= 10) {

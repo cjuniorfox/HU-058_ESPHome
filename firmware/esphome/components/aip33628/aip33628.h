@@ -105,6 +105,10 @@ class Aip33628Panel : public Component {
     twelve_hour_ = v;
     dirty_ = true;
   }
+  void set_japanese( bool v) {
+    japanese_ = v;
+    dirty_ = true;
+  }
   void set_blink_colon(bool v) {
     blink_colon_ = v;
     dirty_ = true;
@@ -198,6 +202,7 @@ class Aip33628Panel : public Component {
 
   uint8_t max_current_{15};
   bool twelve_hour_{true};
+  bool japanese_{false};
   bool blink_colon_{true};
   bool online_{false};
   bool month_first_{true};  // date format, true for MM-DD, false for DD-MM

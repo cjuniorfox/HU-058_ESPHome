@@ -22,6 +22,8 @@ esphome:
           id(panel)->set_effect(ef == "Color Cycle" ? 1 : ef == "Flash" ? 2 : 0);
           std::string format = id(date_display_format).current_option();
           id(panel)->set_date_format(format == "MM/DD" ? 1 : 0);
+          id(panel)->set_twelve_hour(id(twelve_hour_mode).current_option() == "12 Hour" || id(twelve_hour_mode).current_option() == "12 Hour Jp");
+          id(panel)->set_japanese(id(twelve_hour_mode).current_option() == "12 Hour Jp" || id(twelve_hour_mode).current_option() == "30 Hour Jp (bar & TV)");
 
 esp32:
   variant: esp32c3
@@ -74,7 +76,7 @@ api:
         - lambda: |-
             float c = id(hu058_temperature).state;
             float f = c * 9.0f / 5.0f + 32.0f;
-          
+
             int value = (id(temp_display_unit).current_option() == "F")
                 ? (int) round(f)
                 : (int) round(c);
@@ -181,7 +183,7 @@ api:
 ota:
   - platform: esphome
     encryption:
-      key: !secret api_key 
+      key: !secret api_key
 
 wifi:
   ssid: !secret wifi_ssid
@@ -290,7 +292,7 @@ sensor:
     id: hu058_ntc_resistance
     #name: "HU-058 NTC Resistance"
     sensor: hu058_ntc_voltage
-    configuration: DOWNSTREAM 
+    configuration: DOWNSTREAM
     resistor: 10kOhm
 
   - platform: ntc
@@ -308,15 +310,6 @@ sensor:
           send_every: 1
 
 switch:
-  - platform: template
-    id: twelve_hour_mode
-    name: 12 Hour Time
-    optimistic: true
-    restore_mode: RESTORE_DEFAULT_ON
-    turn_on_action:
-      - lambda: id(panel)->set_twelve_hour(true);
-    turn_off_action:
-      - lambda: id(panel)->set_twelve_hour(false);
 
   # Off means a steady colon, not a dark one.
   - platform: template
@@ -344,7 +337,7 @@ button:
     name: Show Seconds
     on_press:
       - lambda: id(panel)->show_seconds(5000);
-  
+
   - platform: template
     name: Show Date
     on_press:
@@ -397,6 +390,30 @@ button:
 # Developer Tools > Actions. Setting either entity redraws immediately and the
 # panel falls back to the time ten seconds later on its own.
 select:
+  - platform: template
+    id: twelve_hour_mode
+    name: Hour Format
+    optimistic: true
+    restore_value: true
+    initial_option: "24 Hour"
+    options: ["12 Hour", "24 Hour", "12 Hour Jp", "30 Hour Jp (bar & TV)"]
+    set_action:
+      - lambda: |-
+          std::string v = x;
+          if (v == "12 Hour") {
+            id(panel)->set_twelve_hour(true);
+            id(panel)->set_japanese(false);
+          } else if (v == "24 Hour") {
+            id(panel)->set_twelve_hour(false);
+            id(panel)->set_japanese(false);
+          } else if (v == "12 Hour Jp") {
+            id(panel)->set_twelve_hour(true);
+            id(panel)->set_japanese(true);
+          } else if (v == "30 Hour Jp (bar & TV)") {
+            id(panel)->set_twelve_hour(false);
+            id(panel)->set_japanese(true);
+          }
+
   # Effects run on the device, not in Home Assistant, so a fade stays smooth
   # and keeps going if the network drops. Every entity here is a normal one,
   # so an automation can drive them, or call the set_effect action to set the
@@ -475,7 +492,7 @@ text:
           int len = s.length();
           int ms = len < 10 ? 10000 : (len + 2) * 1000;
           id(panel)->show_text(s, ms);
-    
+
 number:
   # Seconds for one full cycle. For Flash this is one complete on and off.
   - platform: template
